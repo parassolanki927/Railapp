@@ -1,0 +1,146 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#12263f"><link rel="manifest" href="manifest.json">
+<title>RailSathi</title>
+<style>
+:root{--bg:#f5f6f2;--card:#fff;--ink:#14202e;--mute:#667385;--line:#dde1e6;--navy:#12263f;--amb:#f2b01e;--ok:#1b8a4b;--warn:#c27a00;--bad:#c23b2e}
+@media(prefers-color-scheme:dark){:root:not([data-t=light]){--bg:#0d1824;--card:#16273a;--ink:#eef1f4;--mute:#93a1b3;--line:#27394d}}
+:root[data-t=dark]{--bg:#0d1824;--card:#16273a;--ink:#eef1f4;--mute:#93a1b3;--line:#27394d}
+*{box-sizing:border-box;margin:0}
+html,body{height:100%}
+body{background:var(--bg);color:var(--ink);font:16px/1.45 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;padding:env(safe-area-inset-top) 0 0}
+header{background:var(--navy);color:#fff;padding:14px 16px;display:flex;justify-content:space-between;align-items:center;position:sticky;top:0;z-index:5}
+header b{font-size:20px;letter-spacing:.3px}header b i{color:var(--amb);font-style:normal}
+#off{display:none;background:var(--amb);color:#12263f;text-align:center;font-size:13px;padding:4px}
+main{padding:14px 14px 96px;max-width:640px;margin:auto}
+nav{position:fixed;bottom:0;left:0;right:0;background:var(--card);border-top:1px solid var(--line);display:flex;padding-bottom:env(safe-area-inset-bottom)}
+nav button{flex:1;border:0;background:0;color:var(--mute);padding:10px 0 8px;font-size:12px}
+nav button span{display:block;font-size:20px}nav button.on{color:var(--navy);font-weight:700;box-shadow:inset 0 3px var(--amb)}
+@media(prefers-color-scheme:dark){:root:not([data-t=light]) nav button.on{color:var(--amb)}}
+:root[data-t=dark] nav button.on{color:var(--amb)}
+.c{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:14px;margin-bottom:12px}
+label{display:block;font-size:13px;color:var(--mute);margin:8px 0 3px}
+input,select{width:100%;padding:11px;border:1px solid var(--line);border-radius:8px;background:var(--bg);color:var(--ink);font-size:16px}
+.btn{width:100%;margin-top:12px;padding:12px;border:0;border-radius:8px;background:var(--navy);color:#fff;font-size:16px;font-weight:600}
+.btn.a{background:var(--amb);color:#12263f}.btn.s{width:auto;padding:6px 12px;margin:0;font-size:14px}
+.row{display:flex;justify-content:space-between;align-items:center;gap:8px}
+.tt{font-size:22px;font-weight:700;font-variant-numeric:tabular-nums}
+.m{color:var(--mute);font-size:13px}
+.tag{display:inline-block;padding:2px 8px;border-radius:5px;font-size:12px;font-weight:700;border:1px solid currentColor}
+.ok{color:var(--ok)}.wn{color:var(--warn)}.bd{color:var(--bad)}
+.chips{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}
+.chip{padding:5px 10px;border:1px solid var(--line);border-radius:16px;font-size:13px;background:var(--card);color:var(--ink)}
+.st{position:relative;padding:0 0 14px 22px;border-left:3px solid var(--line);margin-left:6px}
+.st:before{content:"";position:absolute;left:-8px;top:3px;width:13px;height:13px;border-radius:50%;background:var(--card);border:3px solid var(--line)}
+.st.p{border-color:var(--navy)}.st.p:before{background:var(--navy);border-color:var(--navy)}
+.st.n:before{background:var(--amb);border-color:var(--amb)}
+#sheet{position:fixed;inset:0;background:var(--bg);z-index:9;overflow:auto;display:none;padding:env(safe-area-inset-top) 0 40px}
+#sheet.on{display:block}
+.empty{text-align:center;color:var(--mute);padding:28px 10px}
+</style></head><body>
+<header><b>Rail<i>Sathi</i></b><span class="m" style="color:#b9c6d6" id="demo"></span></header>
+<div id="off"></div><main id="v"></main>
+<div id="sheet"><header><b id="sh"></b><button class="btn s a" onclick="closeS()">✕</button></header><main id="sb"></main></div>
+<nav id="nav"></nav>
+<script>
+/* ---------- CONFIG: real API chaho to URL ahi nakho. Khali = demo data ---------- */
+const API=""; // e.g. "https://your-api.example.com"
+/* ---------- state ---------- */
+const S=Object.assign({lang:"en",theme:"auto",fav:[],hist:[],alert:false,tab:"search"},JSON.parse(localStorage.getItem("rs")||"{}"));
+const save=()=>localStorage.setItem("rs",JSON.stringify(S));
+const $=id=>document.getElementById(id);
+/* ---------- i18n ---------- */
+const L={en:{search:"Search",pnr:"PNR",live:"Live",saved:"Saved",more:"More",from:"From",to:"To",date:"Date",find:"Find trains",pnrno:"10-digit PNR",check:"Check status",tno:"Train number",track:"Track train",recent:"Recent searches",nores:"No trains found between these stations.",nosaved:"Tap ☆ on a train to save it for offline use.",lang:"Language",theme:"Theme",alert:"Alert me if delay is over 15 min",off:"You are offline. Showing saved data.",tt:"Timetable",coach:"Coach position",seats:"Seat availability",delay:"Delay",on:"On time",min:"min late",at:"Now near",pass:"Passengers",bad:"Enter a valid value."},
+hi:{search:"खोजें",pnr:"PNR",live:"लाइव",saved:"सेव",more:"और",from:"कहाँ से",to:"कहाँ तक",date:"तारीख",find:"ट्रेन खोजें",pnrno:"10 अंकों का PNR",check:"स्टेटस देखें",tno:"ट्रेन नंबर",track:"ट्रेन ट्रैक करें",recent:"हाल की खोज",nores:"इन स्टेशनों के बीच कोई ट्रेन नहीं मिली।",nosaved:"ऑफलाइन के लिए ट्रेन पर ☆ दबाएँ।",lang:"भाषा",theme:"थीम",alert:"15 मिनट से ज़्यादा देरी पर सूचित करें",off:"आप ऑफलाइन हैं। सेव डेटा दिख रहा है।",tt:"समय सारणी",coach:"कोच की स्थिति",seats:"सीट उपलब्धता",delay:"देरी",on:"समय पर",min:"मिनट लेट",at:"अभी पास में",pass:"यात्री",bad:"सही मान डालें।"},
+gu:{search:"શોધો",pnr:"PNR",live:"લાઇવ",saved:"સેવ",more:"વધુ",from:"ક્યાંથી",to:"ક્યાં સુધી",date:"તારીખ",find:"ટ્રેન શોધો",pnrno:"10 અંકનો PNR",check:"સ્ટેટસ જુઓ",tno:"ટ્રેન નંબર",track:"ટ્રેન ટ્રેક કરો",recent:"તાજેતરની શોધ",nores:"આ સ્ટેશનો વચ્ચે કોઈ ટ્રેન મળી નથી.",nosaved:"ઓફલાઇન માટે ટ્રેન પર ☆ દબાવો.",lang:"ભાષા",theme:"થીમ",alert:"15 મિનિટથી વધુ મોડું થાય તો જણાવો",off:"તમે ઓફલાઇન છો. સેવ કરેલો ડેટા બતાવ્યો છે.",tt:"સમય સારણી",coach:"કોચ સ્થિતિ",seats:"સીટ ઉપલબ્ધતા",delay:"મોડું",on:"સમયસર",min:"મિનિટ મોડી",at:"હમણાં નજીક",pass:"મુસાફરો",bad:"સાચી કિંમત નાખો."}};
+const t=k=>(L[S.lang]||L.en)[k]||L.en[k]||k;
+/* ---------- demo data (real API na ave tyare) ---------- */
+const ST={NDLS:"New Delhi",BCT:"Mumbai Central",ADI:"Ahmedabad",BRC:"Vadodara",ST:"Surat",RTM:"Ratlam",KOTA:"Kota",HWH:"Howrah",ASN:"Asansol",DHN:"Dhanbad",GAYA:"Gaya",CNB:"Kanpur",JP:"Jaipur",MAS:"Chennai Central",SBC:"Bengaluru",PUNE:"Pune",BPL:"Bhopal"};
+const TR=[
+{no:"12951",name:"Mumbai Rajdhani",cls:["3A","2A","1A"],r:[["BCT","17:00"],["ST","19:40"],["BRC","21:35"],["RTM","00:20"],["KOTA","03:10"],["NDLS","08:32"]]},
+{no:"12952",name:"New Delhi Rajdhani",cls:["3A","2A","1A"],r:[["NDLS","16:55"],["KOTA","21:50"],["RTM","00:35"],["BRC","03:20"],["ST","05:15"],["BCT","08:15"]]},
+{no:"12009",name:"Shatabdi Express",cls:["CC","EC"],r:[["BCT","06:25"],["ST","09:15"],["BRC","11:45"],["ADI","13:30"]]},
+{no:"12010",name:"Shatabdi Express",cls:["CC","EC"],r:[["ADI","14:40"],["BRC","16:20"],["ST","18:55"],["BCT","21:25"]]},
+{no:"12953",name:"August Kranti Rajdhani",cls:["SL","3A","2A","1A"],r:[["BCT","17:40"],["ST","20:30"],["BRC","22:25"],["RTM","01:20"],["KOTA","04:10"],["NDLS","10:55"]]},
+{no:"12301",name:"Howrah Rajdhani",cls:["3A","2A","1A"],r:[["HWH","16:50"],["ASN","19:45"],["DHN","20:50"],["GAYA","23:10"],["CNB","04:15"],["NDLS","10:05"]]},
+{no:"12627",name:"Karnataka Express",cls:["SL","3A","2A"],r:[["SBC","19:20"],["PUNE","12:15"],["BPL","03:00"],["NDLS","12:30"]]}];
+const h=s=>{let x=7;for(const c of String(s))x=(x*31+c.charCodeAt(0))>>>0;return x};
+const mins=s=>{const[a,b]=s.split(":");return a*60+ +b};
+const hm=m=>{m=(m%1440+1440)%1440;return String(m/60|0).padStart(2,"0")+":"+String(m%60).padStart(2,"0")};
+const span=(r,i,j)=>{let d=0,p=mins(r[i][1]);for(let k=i+1;k<=j;k++){const m=mins(r[k][1]);d+=(m-p+1440)%1440;p=m}return d};
+const dur=m=>(m/60|0)+"h "+String(m%60).padStart(2,"0")+"m";
+const nm=c=>ST[c]||c;
+const code=v=>{v=(v||"").trim();const m=v.match(/\(([A-Z]+)\)\s*$/);if(m)return m[1];const u=v.toUpperCase();if(ST[u])return u;const e=Object.entries(ST).find(([c,n])=>n.toLowerCase()===v.toLowerCase())||Object.entries(ST).find(([c,n])=>n.toLowerCase().startsWith(v.toLowerCase())&&v.length>1);return e?e[0]:null};
+function avail(no,cls,date){const n=h(no+cls+date)%10;return n<5?["AVL "+(n*17+8),"ok"]:n<7?["RAC "+n,"wn"]:["WL "+(n*3+1),"bd"]}
+async function net(path){if(!API)return null;try{const r=await fetch(API+path);if(!r.ok)throw 0;return await r.json()}catch(e){return null}}
+const cacheSet=(k,v)=>{try{localStorage.setItem("c:"+k,JSON.stringify(v))}catch(e){}};
+const cacheGet=k=>{try{return JSON.parse(localStorage.getItem("c:"+k))}catch(e){return null}};
+async function searchTrains(f,to){ // API adapter: return [{no,name,cls,r:[[code,"HH:MM"],..]}]
+ const live=await net(`/search?from=${f}&to=${to}`);
+ const res=live||TR.filter(x=>{const i=x.r.findIndex(s=>s[0]===f),j=x.r.findIndex(s=>s[0]===to);return i>=0&&j>i});
+ cacheSet(`s:${f}:${to}`,res);return res}
+/* ---------- ui helpers ---------- */
+const tabs=[["search","🔍"],["pnr","🎫"],["live","📍"],["saved","★"],["more","⚙"]];
+function nav(){$("nav").innerHTML=tabs.map(([k,i])=>`<button class="${S.tab===k?"on":""}" onclick="go('${k}')"><span>${i}</span>${t(k)}</button>`).join("")}
+function go(k){S.tab=k;save();nav();render()}
+function applyTheme(){S.theme==="auto"?document.documentElement.removeAttribute("data-t"):document.documentElement.dataset.t=S.theme}
+function net_(){$("off").style.display=navigator.onLine?"none":"block";$("off").textContent=t("off")}
+addEventListener("online",net_);addEventListener("offline",net_);
+const dl=`<datalist id="sl">${Object.entries(ST).map(([c,n])=>`<option value="${n} (${c})">`).join("")}</datalist>`;
+const today=()=>new Date().toISOString().slice(0,10);
+function openS(title,html){$("sh").textContent=title;$("sb").innerHTML=html;$("sheet").classList.add("on");$("sheet").scrollTop=0}
+function closeS(){$("sheet").classList.remove("on")}
+/* ---------- screens ---------- */
+function render(){$("demo").textContent=API?"":"demo data";({search:rSearch,pnr:rPnr,live:rLive,saved:rSaved,more:rMore})[S.tab]()}
+function rSearch(){
+ $("v").innerHTML=`<div class="c">${dl}<label>${t("from")}</label><input id="f" list="sl" placeholder="Mumbai Central"><label>${t("to")}</label><input id="to" list="sl" placeholder="New Delhi"><label>${t("date")}</label><input id="d" type="date" value="${today()}"><button class="btn" onclick="doSearch()">${t("find")}</button></div>
+ ${S.hist.length?`<div class="m">${t("recent")}</div><div class="chips">${S.hist.map(x=>`<button class="chip" onclick="quick('${x[0]}','${x[1]}')">${nm(x[0])} → ${nm(x[1])}</button>`).join("")}</div>`:""}<div id="res" style="margin-top:14px"></div>`}
+function quick(a,b){$("f").value=`${nm(a)} (${a})`;$("to").value=`${nm(b)} (${b})`;doSearch()}
+async function doSearch(){
+ const f=code($("f").value),to=code($("to").value),d=$("d").value;
+ if(!f||!to||f===to){$("res").innerHTML=`<div class="empty">${t("bad")}</div>`;return}
+ S.hist=[[f,to],...S.hist.filter(x=>!(x[0]===f&&x[1]===to))].slice(0,5);save();
+ let res;try{res=await searchTrains(f,to)}catch(e){res=null}
+ if(!res||!navigator.onLine&&!res.length)res=cacheGet(`s:${f}:${to}`)||[];
+ $("res").innerHTML=res.length?res.map(x=>{const i=x.r.findIndex(s=>s[0]===f),j=x.r.findIndex(s=>s[0]===to);
+ return `<div class="c" onclick='detail("${x.no}","${f}","${to}","${d}")'><div class="row"><b>${x.no} ${x.name}</b></div>
+ <div class="row" style="margin-top:6px"><span class="tt">${x.r[i][1]}</span><span class="m">${dur(span(x.r,i,j))}</span><span class="tt">${x.r[j][1]}</span></div>
+ <div class="m row"><span>${nm(f)}</span><span>${nm(to)}</span></div>
+ <div class="chips">${x.cls.map(c=>{const[a,k]=avail(x.no,c,d);return `<span class="tag ${k}">${c} ${a}</span>`}).join("")}</div></div>`}).join(""):`<div class="empty">${t("nores")}</div>`}
+function detail(no,f,to,d){
+ const x=TR.find(z=>z.no===no);if(!x)return;const fv=S.fav.includes(no);
+ const coach=["Engine","EOG","S1–S6","B1–B3","A1–A2","H1","GEN","SLR"];
+ openS(`${no} ${x.name}`,`<div class="row"><button class="btn s a" onclick="fav('${no}',this)">${fv?"★":"☆"}</button><button class="btn s" onclick="closeS();S.tab='live';save();nav();render();$('tn').value='${no}';doLive()">📍 ${t("live")}</button></div>
+ ${f&&to?`<div class="c" style="margin-top:12px"><b>${t("seats")}</b><div class="chips">${x.cls.map(c=>{const[a,k]=avail(no,c,d||today());return `<span class="tag ${k}">${c} ${a}</span>`}).join("")}</div></div>`:""}
+ <div class="c"><b>${t("tt")}</b><div style="margin-top:10px">${x.r.map(s=>`<div class="st"><b>${nm(s[0])}</b> <span class="m">${s[0]}</span><div class="tt" style="font-size:16px">${s[1]}</div></div>`).join("")}</div></div>
+ <div class="c"><b>${t("coach")}</b><div class="chips">${coach.map(c=>`<span class="chip">${c}</span>`).join("")}</div></div>`)}
+function fav(no,b){const i=S.fav.indexOf(no);i>=0?S.fav.splice(i,1):S.fav.push(no);save();b.textContent=S.fav.includes(no)?"★":"☆"}
+function rPnr(){$("v").innerHTML=`<div class="c"><label>${t("pnrno")}</label><input id="pn" inputmode="numeric" maxlength="10"><button class="btn" onclick="doPnr()">${t("check")}</button></div><div id="pr"></div>`}
+async function doPnr(){
+ const p=$("pn").value.trim();if(!/^\d{10}$/.test(p)){$("pr").innerHTML=`<div class="empty">${t("bad")}</div>`;return}
+ let r=await net("/pnr/"+p);
+ if(!r){const x=TR[h(p)%TR.length],n=1+h(p+"n")%3,c=x.cls[h(p+"c")%x.cls.length];
+  r={train:x.no,name:x.name,from:x.r[0][0],to:x.r.at(-1)[0],cls:c,dep:x.r[0][1],chart:h(p)%2?"Chart not prepared":"Chart prepared",
+  pax:Array.from({length:n},(_,i)=>{const w=h(p+i)%4===0;return{s:w?"WL "+(1+h(p+i)%9)+" / WL "+(1+h(p+i)%6):"CNF "+c.replace(/\d/,"")+"/"+(1+h(p+i)%72),k:w?"wn":"ok"}})}}
+ cacheSet("p:"+p,r);
+ $("pr").innerHTML=`<div class="c"><b>${r.train} ${r.name}</b><div class="m">${nm(r.from)} → ${nm(r.to)} · ${r.cls} · ${r.dep}</div><div class="m">${r.chart}</div></div>
+ <div class="c"><b>${t("pass")}</b>${r.pax.map((q,i)=>`<div class="row" style="margin-top:8px"><span>${i+1}</span><span class="tag ${q.k}">${q.s}</span></div>`).join("")}</div>`}
+let timer;
+function rLive(){$("v").innerHTML=`<div class="c"><label>${t("tno")}</label><input id="tn" inputmode="numeric" list="tl" placeholder="12951"><datalist id="tl">${TR.map(x=>`<option value="${x.no}">${x.name}`).join("")}</datalist><button class="btn" onclick="doLive()">${t("track")}</button><label style="display:flex;gap:8px;align-items:center;margin-top:12px"><input type="checkbox" style="width:auto" id="al" ${S.alert?"checked":""} onchange="setAlert(this.checked)">${t("alert")}</label></div><div id="lv"></div>`}
+async function setAlert(on){S.alert=on;save();if(on&&"Notification"in window&&Notification.permission==="default")await Notification.requestPermission()}
+async function doLive(){
+ clearInterval(timer);const no=$("tn").value.trim(),x=TR.find(z=>z.no===no);
+ if(!x){$("lv").innerHTML=`<div class="empty">${t("bad")}</div>`;return}
+ const paint=()=>{const hr=new Date().getHours()*4+new Date().getMinutes()/15|0,pos=h(no)%(x.r.length-1),dly=h(no+hr)%40;
+  cacheSet("l:"+no,{pos,dly});
+  if(S.alert&&dly>15&&"Notification"in window&&Notification.permission==="granted"&&S._n!==no+dly){S._n=no+dly;new Notification(`${no} ${x.name}`,{body:`${dly} ${t("min")}`})}
+  $("lv").innerHTML=`<div class="c"><b>${no} ${x.name}</b><div class="m">${t("at")} ${nm(x.r[pos][0])}</div><div style="margin-top:6px" class="tag ${dly<6?"ok":dly<20?"wn":"bd"}">${dly<6?t("on"):dly+" "+t("min")}</div></div>
+  <div class="c">${x.r.map((s,i)=>`<div class="st ${i<=pos?"p":""} ${i===pos?"n":""}"><b>${nm(s[0])}</b><div class="row"><span class="m">${s[1]}</span>${i<=pos?`<span class="m ${dly<6?"ok":"wn"}">${hm(mins(s[1])+dly)}</span>`:""}</div></div>`).join("")}</div>`};
+ paint();timer=setInterval(paint,120000)}
+function rSaved(){const l=S.fav.map(n=>TR.find(x=>x.no===n)).filter(Boolean);
+ $("v").innerHTML=l.length?l.map(x=>`<div class="c" onclick='detail("${x.no}","","","")'><b>${x.no} ${x.name}</b><div class="m">${nm(x.r[0][0])} → ${nm(x.r.at(-1)[0])}</div></div>`).join(""):`<div class="empty">${t("nosaved")}</div>`}
+function rMore(){$("v").innerHTML=`<div class="c"><label>${t("lang")}</label><select onchange="S.lang=this.value;save();nav();render()">${[["en","English"],["hi","हिन्दी"],["gu","ગુજરાતી"]].map(([k,n])=>`<option value="${k}" ${S.lang===k?"selected":""}>${n}</option>`).join("")}</select><label>${t("theme")}</label><select onchange="S.theme=this.value;save();applyTheme()">${["auto","light","dark"].map(k=>`<option ${S.theme===k?"selected":""}>${k}</option>`).join("")}</select></div>`}
+applyTheme();nav();net_();render();
+if("serviceWorker"in navigator)navigator.serviceWorker.register("sw.js").catch(()=>{});
+</script></body></html>
