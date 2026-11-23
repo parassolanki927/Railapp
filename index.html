@@ -45,7 +45,8 @@ input,select{width:100%;padding:11px;border:1px solid var(--line);border-radius:
 <nav id="nav"></nav>
 <script>
 /* ---------- CONFIG: real API chaho to URL ahi nakho. Khali = demo data ---------- */
-const API=""; // e.g. "https://your-api.example.com"
+const API="https://railsathi.parassolanki927.workers.dev"; // Cloudflare Worker URL ahi nakho, e.g. "https://railsathi.NAAM.workers.dev"
+let LIVE=false;const REAL=new Set();
 /* ---------- state ---------- */
 const S=Object.assign({lang:"en",theme:"auto",fav:[],hist:[],alert:false,tab:"search"},JSON.parse(localStorage.getItem("rs")||"{}"));
 const save=()=>localStorage.setItem("rs",JSON.stringify(S));
@@ -71,13 +72,14 @@ const hm=m=>{m=(m%1440+1440)%1440;return String(m/60|0).padStart(2,"0")+":"+Stri
 const span=(r,i,j)=>{let d=0,p=mins(r[i][1]);for(let k=i+1;k<=j;k++){const m=mins(r[k][1]);d+=(m-p+1440)%1440;p=m}return d};
 const dur=m=>(m/60|0)+"h "+String(m%60).padStart(2,"0")+"m";
 const nm=c=>ST[c]||c;
-const code=v=>{v=(v||"").trim();const m=v.match(/\(([A-Z]+)\)\s*$/);if(m)return m[1];const u=v.toUpperCase();if(ST[u])return u;const e=Object.entries(ST).find(([c,n])=>n.toLowerCase()===v.toLowerCase())||Object.entries(ST).find(([c,n])=>n.toLowerCase().startsWith(v.toLowerCase())&&v.length>1);return e?e[0]:null};
+const code=v=>{v=(v||"").trim();const m=v.match(/\(([A-Z]+)\)\s*$/);if(m)return m[1];const u=v.toUpperCase();if(ST[u])return u;const e=Object.entries(ST).find(([c,n])=>n.toLowerCase()===v.toLowerCase())||Object.entries(ST).find(([c,n])=>n.toLowerCase().startsWith(v.toLowerCase())&&v.length>1);return e?e[0]:(API&&/^[A-Z]{2,5}$/.test(u)?u:null)};
 function avail(no,cls,date){const n=h(no+cls+date)%10;return n<5?["AVL "+(n*17+8),"ok"]:n<7?["RAC "+n,"wn"]:["WL "+(n*3+1),"bd"]}
-async function net(path){if(!API)return null;try{const r=await fetch(API+path);if(!r.ok)throw 0;return await r.json()}catch(e){return null}}
+async function net(path){if(!API)return null;try{const r=await fetch(API+path);if(!r.ok)throw 0;const j=await r.json();LIVE=true;$("demo").textContent="";return j}catch(e){return null}}
 const cacheSet=(k,v)=>{try{localStorage.setItem("c:"+k,JSON.stringify(v))}catch(e){}};
 const cacheGet=k=>{try{return JSON.parse(localStorage.getItem("c:"+k))}catch(e){return null}};
-async function searchTrains(f,to){ // API adapter: return [{no,name,cls,r:[[code,"HH:MM"],..]}]
- const live=await net(`/search?from=${f}&to=${to}`);
+async function searchTrains(f,to,d){
+ const lv=await net(`/v1/trains/between/${f}/${to}?date=${d}`);
+ const live=lv&&lv.success?lv.data.trains.map(z=>{REAL.add(z.train.number);return{no:z.train.number,name:z.train.name,cls:[],dur:z.duration,r:[[f,z.from.departure],[to,z.to.arrival]]}}):null;
  const res=live||TR.filter(x=>{const i=x.r.findIndex(s=>s[0]===f),j=x.r.findIndex(s=>s[0]===to);return i>=0&&j>i});
  cacheSet(`s:${f}:${to}`,res);return res}
 /* ---------- ui helpers ---------- */
@@ -92,7 +94,7 @@ const today=()=>new Date().toISOString().slice(0,10);
 function openS(title,html){$("sh").textContent=title;$("sb").innerHTML=html;$("sheet").classList.add("on");$("sheet").scrollTop=0}
 function closeS(){$("sheet").classList.remove("on")}
 /* ---------- screens ---------- */
-function render(){$("demo").textContent=API?"":"demo data";({search:rSearch,pnr:rPnr,live:rLive,saved:rSaved,more:rMore})[S.tab]()}
+function render(){$("demo").textContent=LIVE?"":"demo data";({search:rSearch,pnr:rPnr,live:rLive,saved:rSaved,more:rMore})[S.tab]()}
 function rSearch(){
  $("v").innerHTML=`<div class="c">${dl}<label>${t("from")}</label><input id="f" list="sl" placeholder="Mumbai Central"><label>${t("to")}</label><input id="to" list="sl" placeholder="New Delhi"><label>${t("date")}</label><input id="d" type="date" value="${today()}"><button class="btn" onclick="doSearch()">${t("find")}</button></div>
  ${S.hist.length?`<div class="m">${t("recent")}</div><div class="chips">${S.hist.map(x=>`<button class="chip" onclick="quick('${x[0]}','${x[1]}')">${nm(x[0])} → ${nm(x[1])}</button>`).join("")}</div>`:""}<div id="res" style="margin-top:14px"></div>`}
@@ -101,22 +103,32 @@ async function doSearch(){
  const f=code($("f").value),to=code($("to").value),d=$("d").value;
  if(!f||!to||f===to){$("res").innerHTML=`<div class="empty">${t("bad")}</div>`;return}
  S.hist=[[f,to],...S.hist.filter(x=>!(x[0]===f&&x[1]===to))].slice(0,5);save();
- let res;try{res=await searchTrains(f,to)}catch(e){res=null}
+ let res;try{res=await searchTrains(f,to,d)}catch(e){res=null}
  if(!res||!navigator.onLine&&!res.length)res=cacheGet(`s:${f}:${to}`)||[];
  $("res").innerHTML=res.length?res.map(x=>{const i=x.r.findIndex(s=>s[0]===f),j=x.r.findIndex(s=>s[0]===to);
  return `<div class="c" onclick='detail("${x.no}","${f}","${to}","${d}")'><div class="row"><b>${x.no} ${x.name}</b></div>
- <div class="row" style="margin-top:6px"><span class="tt">${x.r[i][1]}</span><span class="m">${dur(span(x.r,i,j))}</span><span class="tt">${x.r[j][1]}</span></div>
+ <div class="row" style="margin-top:6px"><span class="tt">${x.r[i][1]}</span><span class="m">${dur(x.dur||span(x.r,i,j))}</span><span class="tt">${x.r[j][1]}</span></div>
  <div class="m row"><span>${nm(f)}</span><span>${nm(to)}</span></div>
  <div class="chips">${x.cls.map(c=>{const[a,k]=avail(x.no,c,d);return `<span class="tag ${k}">${c} ${a}</span>`}).join("")}</div></div>`}).join(""):`<div class="empty">${t("nores")}</div>`}
+async function realDetail(no){
+ openS(no,`<div class="empty">…</div>`);
+ const r=await net(`/v1/trains/${no}/live?haltsOnly=true`);let d=r&&r.success?r.data:null;
+ if(d)cacheSet("d:"+no,d);else d=cacheGet("d:"+no);
+ if(!d){$("sb").innerHTML=`<div class="empty">${t("bad")}</div>`;return}
+ const nmx=(d.trainName||"").replace(/['"]/g,"");$("sh").textContent=`${no} ${nmx}`;
+ const cp=(d.train&&d.train.coachPosition||"").split("-").filter(Boolean);
+ $("sb").innerHTML=`<button class="btn s a" onclick="fav('${no}',this,'${nmx}')">${S.fav.includes(no)?"★":"☆"}</button>
+ <div class="c" style="margin-top:12px"><b>${t("tt")}</b><div style="margin-top:10px">${(d.route||[]).map(s=>`<div class="st"><b>${s.stationName}</b> <span class="m">${s.stationCode}</span><div class="tt" style="font-size:16px">${(s.scheduledDeparture||s.scheduledArrival||"").slice(11,16)}</div></div>`).join("")}</div></div>
+ ${cp.length?`<div class="c"><b>${t("coach")}</b><div class="chips">${cp.map(c=>`<span class="chip">${c}</span>`).join("")}</div></div>`:""}`}
 function detail(no,f,to,d){
- const x=TR.find(z=>z.no===no);if(!x)return;const fv=S.fav.includes(no);
+ const x=TR.find(z=>z.no===no);if(REAL.has(no)||!x)return realDetail(no);const fv=S.fav.includes(no);
  const coach=["Engine","EOG","S1–S6","B1–B3","A1–A2","H1","GEN","SLR"];
  openS(`${no} ${x.name}`,`<div class="row"><button class="btn s a" onclick="fav('${no}',this)">${fv?"★":"☆"}</button><button class="btn s" onclick="closeS();S.tab='live';save();nav();render();$('tn').value='${no}';doLive()">📍 ${t("live")}</button></div>
  ${f&&to?`<div class="c" style="margin-top:12px"><b>${t("seats")}</b><div class="chips">${x.cls.map(c=>{const[a,k]=avail(no,c,d||today());return `<span class="tag ${k}">${c} ${a}</span>`}).join("")}</div></div>`:""}
  <div class="c"><b>${t("tt")}</b><div style="margin-top:10px">${x.r.map(s=>`<div class="st"><b>${nm(s[0])}</b> <span class="m">${s[0]}</span><div class="tt" style="font-size:16px">${s[1]}</div></div>`).join("")}</div></div>
  <div class="c"><b>${t("coach")}</b><div class="chips">${coach.map(c=>`<span class="chip">${c}</span>`).join("")}</div></div>`)}
-function fav(no,b){const i=S.fav.indexOf(no);i>=0?S.fav.splice(i,1):S.fav.push(no);save();b.textContent=S.fav.includes(no)?"★":"☆"}
-function rPnr(){$("v").innerHTML=`<div class="c"><label>${t("pnrno")}</label><input id="pn" inputmode="numeric" maxlength="10"><button class="btn" onclick="doPnr()">${t("check")}</button></div><div id="pr"></div>`}
+function fav(no,b,n){S.fn=S.fn||{};if(n)S.fn[no]=n;const i=S.fav.indexOf(no);i>=0?S.fav.splice(i,1):S.fav.push(no);save();b.textContent=S.fav.includes(no)?"★":"☆"}
+function rPnr(){$("v").innerHTML=`<div class="c"><label>${t("pnrno")}</label><input id="pn" inputmode="numeric" maxlength="10"><button class="btn" onclick="doPnr()">${t("check")}</button><div class="m" style="margin-top:8px">Demo: PNR mate real API nathi.</div></div><div id="pr"></div>`}
 async function doPnr(){
  const p=$("pn").value.trim();if(!/^\d{10}$/.test(p)){$("pr").innerHTML=`<div class="empty">${t("bad")}</div>`;return}
  let r=await net("/pnr/"+p);
@@ -130,7 +142,11 @@ let timer;
 function rLive(){$("v").innerHTML=`<div class="c"><label>${t("tno")}</label><input id="tn" inputmode="numeric" list="tl" placeholder="12951"><datalist id="tl">${TR.map(x=>`<option value="${x.no}">${x.name}`).join("")}</datalist><button class="btn" onclick="doLive()">${t("track")}</button><label style="display:flex;gap:8px;align-items:center;margin-top:12px"><input type="checkbox" style="width:auto" id="al" ${S.alert?"checked":""} onchange="setAlert(this.checked)">${t("alert")}</label></div><div id="lv"></div>`}
 async function setAlert(on){S.alert=on;save();if(on&&"Notification"in window&&Notification.permission==="default")await Notification.requestPermission()}
 async function doLive(){
- clearInterval(timer);const no=$("tn").value.trim(),x=TR.find(z=>z.no===no);
+ clearInterval(timer);const no=$("tn").value.trim();
+ if(API&&/^[0-9A-Za-z_-]{3,20}$/.test(no)){const r=await net(`/v1/trains/${encodeURIComponent(no)}/live?haltsOnly=true`);
+  if(r&&r.success){cacheSet("l:"+no,r);return liveReal(r.data)}
+  const c=cacheGet("l:"+no);if(c)return liveReal(c.data,true)}
+ const x=TR.find(z=>z.no===no);
  if(!x){$("lv").innerHTML=`<div class="empty">${t("bad")}</div>`;return}
  const paint=()=>{const hr=new Date().getHours()*4+new Date().getMinutes()/15|0,pos=h(no)%(x.r.length-1),dly=h(no+hr)%40;
   cacheSet("l:"+no,{pos,dly});
@@ -138,8 +154,12 @@ async function doLive(){
   $("lv").innerHTML=`<div class="c"><b>${no} ${x.name}</b><div class="m">${t("at")} ${nm(x.r[pos][0])}</div><div style="margin-top:6px" class="tag ${dly<6?"ok":dly<20?"wn":"bd"}">${dly<6?t("on"):dly+" "+t("min")}</div></div>
   <div class="c">${x.r.map((s,i)=>`<div class="st ${i<=pos?"p":""} ${i===pos?"n":""}"><b>${nm(s[0])}</b><div class="row"><span class="m">${s[1]}</span>${i<=pos?`<span class="m ${dly<6?"ok":"wn"}">${hm(mins(s[1])+dly)}</span>`:""}</div></div>`).join("")}</div>`};
  paint();timer=setInterval(paint,120000)}
-function rSaved(){const l=S.fav.map(n=>TR.find(x=>x.no===n)).filter(Boolean);
- $("v").innerHTML=l.length?l.map(x=>`<div class="c" onclick='detail("${x.no}","","","")'><b>${x.no} ${x.name}</b><div class="m">${nm(x.r[0][0])} → ${nm(x.r.at(-1)[0])}</div></div>`).join(""):`<div class="empty">${t("nosaved")}</div>`}
+function liveReal(d,old){const c=d.currentLocation||{},dly=d.delayMinutes||0;
+ if(S.alert&&dly>15&&"Notification"in window&&Notification.permission==="granted")new Notification(`${d.trainNumber} ${d.trainName}`,{body:`${dly} ${t("min")}`});
+ $("lv").innerHTML=`<div class="c"><div class="row"><b>${d.trainNumber} ${d.trainName}</b><button class="btn s" onclick="doLive()">↻</button></div><div class="m">${t("at")} ${c.stationName||"-"}${old?" · offline":""}</div><div style="margin-top:6px" class="tag ${dly<6?"ok":dly<20?"wn":"bd"}">${dly<6?t("on"):dly+" "+t("min")}</div><div class="m" style="margin-top:6px">${(d.lastUpdatedAt||"").slice(0,16).replace("T"," ")}</div></div>
+ <div class="c">${(d.route||[]).map(s=>`<div class="st ${s.status==="departed"?"p":""} ${s.stationCode===c.stationCode?"n":""}"><b>${s.stationName}</b>${s.platform?` <span class="m">PF ${s.platform}</span>`:""}<div class="m">${(s.scheduledDeparture||s.scheduledArrival||"").slice(11,16)}</div></div>`).join("")}</div>`}
+function rSaved(){const l=S.fav.map(n=>TR.find(x=>x.no===n)||{no:n,name:(S.fn||{})[n]||"",r:[["",""],["",""]]});
+ $("v").innerHTML=l.length?l.map(x=>`<div class="c" onclick='detail("${x.no}","","","")'><b>${x.no} ${x.name}</b><div class="m">${x.r[0][0]?nm(x.r[0][0])+" → "+nm(x.r.at(-1)[0]):""}</div></div>`).join(""):`<div class="empty">${t("nosaved")}</div>`}
 function rMore(){$("v").innerHTML=`<div class="c"><label>${t("lang")}</label><select onchange="S.lang=this.value;save();nav();render()">${[["en","English"],["hi","हिन्दी"],["gu","ગુજરાતી"]].map(([k,n])=>`<option value="${k}" ${S.lang===k?"selected":""}>${n}</option>`).join("")}</select><label>${t("theme")}</label><select onchange="S.theme=this.value;save();applyTheme()">${["auto","light","dark"].map(k=>`<option ${S.theme===k?"selected":""}>${k}</option>`).join("")}</select></div>`}
 applyTheme();nav();net_();render();
 if("serviceWorker"in navigator)navigator.serviceWorker.register("sw.js").catch(()=>{});
